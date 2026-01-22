@@ -27,7 +27,7 @@ services:
           "https://github.com/google/dawn/releases/download/$${DAWN_TAG}/$${EMDAWN_PKG}"
         python3 -c "import zipfile; zf=zipfile.ZipFile('emdawn.zip','r'); zf.extractall('/source'); zf.close()"
 
-        COMMON_EMCC_FLAGS="--no-entry -O3 -msimd128 -DNDEBUG -flto=full -frtti -sEXPORT_ES6=0 -sMODULARIZE=0 -sINITIAL_MEMORY=128MB -sMAXIMUM_MEMORY=4096MB -sALLOW_MEMORY_GROWTH=1 -sFORCE_FILESYSTEM=1 -sEXPORTED_FUNCTIONS=_main,_wllama_malloc,_wllama_start,_wllama_action,_wllama_exit,_wllama_debug -sEXPORTED_RUNTIME_METHODS=ccall,cwrap,HEAPU8,MEMFS,FS,mmapAlloc -sNO_EXIT_RUNTIME=1 -Wno-unused-command-line-argument"
+        COMMON_EMCC_FLAGS="--no-entry -O3 -msimd128 -DNDEBUG -flto=full -frtti -sEXPORT_ES6=0 -sMODULARIZE=0 -sINITIAL_MEMORY=128MB -sMAXIMUM_MEMORY=4096MB -sALLOW_MEMORY_GROWTH=1 -sFORCE_FILESYSTEM=1 -sEXPORTED_FUNCTIONS=_main,_wllama_malloc,_wllama_start,_wllama_action,_wllama_exit,_wllama_debug -sEXPORTED_RUNTIME_METHODS=ccall,cwrap,HEAPU8,MEMFS,FS,mmapAlloc -sNO_EXIT_RUNTIME=1 -Wno-unused-command-line-argument -sIMPORTED_MEMORY"
 
         build_target() {
           local build_name="$1"
