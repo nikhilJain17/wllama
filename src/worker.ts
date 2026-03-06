@@ -72,9 +72,14 @@ export class ProxyToWorker {
     if (!this.pathConfig['wllama.wasm']) {
       throw new Error('"wllama.wasm" is missing from pathConfig');
     }
-    const wasmPath = String(this.pathConfig['wllama.wasm']);
-    const isJspi = wasmPath.includes('/jspi-');
-    const isAsyncify = wasmPath.includes('/asyncify-');
+    const buildType = this.pathConfig['wllama.buildType'];
+    const isJspi = buildType === 'jspi';
+    const isAsyncify = buildType === 'asyncify';
+    if (!isJspi && !isAsyncify) {
+      throw new Error(
+        '"wllama.buildType" must be either "jspi" or "asyncify"'
+      );
+    }
 
     let moduleCode: string;
     if (this.multiThread) {

@@ -643,9 +643,11 @@ export class Wllama {
     const mPathConfig = this.useMultiThread
       ? {
           'wllama.wasm': absoluteUrl(multiThreadPath!),
+          'wllama.buildType': hasJspi ? 'jspi' : 'asyncify',
         }
       : {
           'wllama.wasm': absoluteUrl(singleThreadPath!),
+          'wllama.buildType': hasJspi ? 'jspi' : 'asyncify',
         };
     this.proxy = new ProxyToWorker(
       mPathConfig,
