@@ -340,12 +340,6 @@ onmessage = async (e) => {
     const argAction = args[0];
     const argEncodedMsg = args[1];
     try {
-      msg({
-        verb: 'console.debug',
-        args: [
-          `[worker-action] start action=${argAction} callbackId=${callbackId} payloadBytes=${argEncodedMsg.byteLength}`,
-        ],
-      });
       const inputPtr = await wllamaMalloc(argEncodedMsg.byteLength, 0);
       // copy data to wasm heap
       const inputBuffer = new Uint8Array(
@@ -354,27 +348,9 @@ onmessage = async (e) => {
         argEncodedMsg.byteLength
       );
       inputBuffer.set(argEncodedMsg, 0);
-      msg({
-        verb: 'console.debug',
-        args: [
-          `[worker-action] call action=${argAction} callbackId=${callbackId} inputPtr=${inputPtr}`,
-        ],
-      });
       const outputPtr = await wllamaAction(argAction, inputPtr);
-      msg({
-        verb: 'console.debug',
-        args: [
-          `[worker-action] return action=${argAction} callbackId=${callbackId} outputPtr=${outputPtr}`,
-        ],
-      });
       // length of output buffer is written at the first 4 bytes of input buffer
       const outputLen = new Uint32Array(Module.HEAPU8.buffer, inputPtr, 1)[0];
-      msg({
-        verb: 'console.debug',
-        args: [
-          `[worker-action] output action=${argAction} callbackId=${callbackId} outputLen=${outputLen}`,
-        ],
-      });
       // copy the output buffer to JS heap
       const outputBuffer = new Uint8Array(outputLen);
       const outputSrcView = new Uint8Array(
@@ -388,7 +364,7 @@ onmessage = async (e) => {
       msg({
         verb: 'console.error',
         args: [
-          `[worker-action] throw action=${argAction} callbackId=${callbackId}`,
+          `[worker-action] throw action=${argAction} callbackId=${callbackId} payloadBytes=${argEncodedMsg.byteLength}`,
           err,
         ],
       });

@@ -244,7 +244,6 @@ export class ProxyToWorker {
   private pushTask(param: TaskParam, buffers?: ArrayBuffer[]) {
     return new Promise<any>((resolve, reject) => {
       this.taskQueue.push({ resolve, reject, param, buffers });
-      this.logger.debug(this.formatTaskLog('queue', param));
       this.runTaskLoop();
     });
   }
@@ -262,7 +261,6 @@ export class ProxyToWorker {
       if (!task) break; // no more tasks
       task.startedAt = performance.now();
       this.resultQueue.push(task);
-      this.logger.debug(this.formatTaskLog('send', task.param));
       // TODO @ngxson : Safari mobile doesn't support transferable ArrayBuffer
       this.worker!!.postMessage(
         task.param,
@@ -312,9 +310,6 @@ export class ProxyToWorker {
           );
           waitingTask.reject(err);
         } else {
-          this.logger.debug(
-            this.formatTaskLog('done', waitingTask.param, durationMs)
-          );
           waitingTask.resolve(result);
         }
       } else {

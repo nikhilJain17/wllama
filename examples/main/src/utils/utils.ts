@@ -119,6 +119,9 @@ export const DebugLogger = {
       listener();
     }
   },
+  getText() {
+    return DebugLogger.content.join('\n\n');
+  },
   argsToStr(args: any[]): string {
     return args
       .map((arg) => {
