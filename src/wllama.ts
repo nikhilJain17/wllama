@@ -865,7 +865,6 @@ export class Wllama {
     };
     // predict next tokens
     for (let i = 0; i < (options.nPredict ?? Infinity); i++) {
-      this.logger().debug(`[completion] step=${i} stage=sample:start`);
       const sampled = await this.samplingSample();
       this.logger().debug(
         `[completion] step=${i} stage=sample:done token=${sampled.token} piece=${JSON.stringify(bufToText(sampled.piece))}`
@@ -888,9 +887,7 @@ export class Wllama {
         break; // abort signal is set
       }
       // decode next token
-      this.logger().debug(`[completion] step=${i} stage=accept:start`);
       await this.samplingAccept([sampled.token]);
-      this.logger().debug(`[completion] step=${i} stage=accept:done`);
       this.logger().debug(`[completion] step=${i} stage=decode:start`);
       await this.decode([sampled.token], {});
       this.logger().debug(
