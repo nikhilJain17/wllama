@@ -839,6 +839,9 @@ export class Wllama {
     if (this.addBosToken && tokens[0] !== this.bosToken) {
       tokens.unshift(this.bosToken);
     }
+    this.logger().debug(
+      `[completion] prompt_tokens=${tokens.length} useCache=${!!options.useCache} usingWebGPU=${this.useWebGPU}`
+    );
     // maybe reuse KV cache
     if (options.useCache) {
       tokens = await this.computeNonCachedTokens(tokens);
@@ -862,8 +865,15 @@ export class Wllama {
     };
     // predict next tokens
     for (let i = 0; i < (options.nPredict ?? Infinity); i++) {
+      this.logger().debug(`[completion] step=${i} stage=sample:start`);
       const sampled = await this.samplingSample();
+      this.logger().debug(
+        `[completion] step=${i} stage=sample:done token=${sampled.token} piece=${JSON.stringify(bufToText(sampled.piece))}`
+      );
       if (this.isTokenEOG(sampled.token) || stopTokens.has(sampled.token)) {
+        this.logger().debug(
+          `[completion] step=${i} stage=stop token=${sampled.token}`
+        );
         break; // stop token
       }
       // @ts-ignore Type 'Uint8Array<ArrayBufferLike>' is not assignable to type 'Uint8Array<ArrayBuffer>'
@@ -874,12 +884,34 @@ export class Wllama {
         });
       }
       if (abort || options.abortSignal?.aborted) {
+        this.logger().debug(`[completion] step=${i} stage=abort-requested`);
         break; // abort signal is set
       }
       // decode next token
+      this.logger().debug(`[completion] step=${i} stage=accept:start`);
       await this.samplingAccept([sampled.token]);
+      this.logger().debug(`[completion] step=${i} stage=accept:done`);
+      this.logger().debug(`[completion] step=${i} stage=decode:start`);
       await this.decode([sampled.token], {});
-      await Promise.resolve();
+      this.logger().debug(
+        `[completion] step=${i} stage=decode:done cachedTokens=${this.nCachedTokens}`
+      );
+
+      if ((i + 1) % 10 === 0) {
+        try {
+          const [debugInfo, perf] = await Promise.all([
+            this._getDebugInfo(),
+            this.getPerfContext(),
+          ]);
+          this.logger().debug('[completion] checkpoint', {
+            step: i,
+            debugInfo,
+            perf,
+          });
+        } catch (err) {
+          this.logger().warn('[completion] checkpoint failed', err);
+        }
+      }
     }
     return bufToText(outBuf);
   }

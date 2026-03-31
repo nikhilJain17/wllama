@@ -41,6 +41,7 @@ interface Task {
   reject: any;
   param: TaskParam;
   buffers?: ArrayBuffer[] | undefined;
+  startedAt?: number | undefined;
 }
 
 export class ProxyToWorker {
@@ -243,6 +244,7 @@ export class ProxyToWorker {
   private pushTask(param: TaskParam, buffers?: ArrayBuffer[]) {
     return new Promise<any>((resolve, reject) => {
       this.taskQueue.push({ resolve, reject, param, buffers });
+      this.logger.debug(this.formatTaskLog('queue', param));
       this.runTaskLoop();
     });
   }
@@ -258,7 +260,9 @@ export class ProxyToWorker {
     while (true) {
       const task = this.taskQueue.shift();
       if (!task) break; // no more tasks
+      task.startedAt = performance.now();
       this.resultQueue.push(task);
+      this.logger.debug(this.formatTaskLog('send', task.param));
       // TODO @ngxson : Safari mobile doesn't support transferable ArrayBuffer
       this.worker!!.postMessage(
         task.param,
@@ -298,8 +302,21 @@ export class ProxyToWorker {
       );
       if (idx !== -1) {
         const waitingTask = this.resultQueue.splice(idx, 1)[0];
-        if (err) waitingTask.reject(err);
-        else waitingTask.resolve(result);
+        const durationMs = waitingTask.startedAt
+          ? Math.round((performance.now() - waitingTask.startedAt) * 10) / 10
+          : undefined;
+        if (err) {
+          this.logger.error(
+            this.formatTaskLog('error', waitingTask.param, durationMs),
+            err
+          );
+          waitingTask.reject(err);
+        } else {
+          this.logger.debug(
+            this.formatTaskLog('done', waitingTask.param, durationMs)
+          );
+          waitingTask.resolve(result);
+        }
       } else {
         this.logger.error(
           `Cannot find waiting task with callbackId = ${callbackId}`
@@ -309,14 +326,35 @@ export class ProxyToWorker {
   }
 
   private abort(text: string) {
+    this.logger.error(
+      `Worker abort received; pending tasks=${this.resultQueue.length}; message=${text || '(empty)'}`
+    );
     while (this.resultQueue.length > 0) {
       const waitingTask = this.resultQueue.pop();
       if (!waitingTask) break;
+      this.logger.error(this.formatTaskLog('abort', waitingTask.param));
       waitingTask.reject(
         new Error(
           `Received abort signal from llama.cpp; Message: ${text || '(empty)'}`
         )
       );
     }
+  }
+
+  private formatTaskLog(
+    phase: 'queue' | 'send' | 'done' | 'error' | 'abort',
+    param: TaskParam,
+    durationMs?: number
+  ) {
+    const detail =
+      param.verb === 'wllama.action'
+        ? ` action=${String(param.args[0])}`
+        : param.verb === 'fs.alloc'
+          ? ` file=${String(param.args[0])} size=${String(param.args[1])}`
+          : param.verb === 'fs.write'
+            ? ` fileId=${String(param.args[0])} offset=${String(param.args[2])} size=${param.args[1]?.byteLength ?? 'unknown'}`
+            : '';
+    const duration = durationMs !== undefined ? ` durationMs=${durationMs}` : '';
+    return `[worker:${phase}] callbackId=${param.callbackId} verb=${param.verb}${detail}${duration}`;
   }
 }
