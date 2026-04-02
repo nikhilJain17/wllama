@@ -19,7 +19,7 @@ services:
         set -e
         cd /source
 
-        DAWN_TAG=v20251027.212519
+        DAWN_TAG=v20260317.182325
         EMDAWN_PKG="emdawnwebgpu_pkg-$${DAWN_TAG}.zip"
         EMDAWNWEBGPU_DIR="/source/emdawnwebgpu_pkg"
         echo "Downloading $${EMDAWN_PKG}"
