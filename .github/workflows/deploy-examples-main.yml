@@ -24,11 +24,11 @@ jobs:
         run: npm install && npm run build
 
       - name: Build wllama chat example
-        run: npm ci && npm run build
+        run: npm install && npm run build
         working-directory: examples/main
 
       - name: Build canvas-agent example
-        run: npm ci && npm run build
+        run: npm install && npm run build
         working-directory: examples/canvas-agent
 
       - name: Assemble dist
