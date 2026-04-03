@@ -22,7 +22,13 @@ function AssistantBubble({ msg }: { msg: Extract<ChatMessage, { role: 'assistant
     return (
       <div className="chat chat-start">
         <div className="chat-bubble chat-bubble-error text-sm">
-          ✗ Could not parse code output
+          <div>✗ Could not parse output</div>
+          {msg.raw && (
+            <details className="mt-1">
+              <summary className="cursor-pointer text-xs opacity-70">show raw</summary>
+              <pre className="mt-1 text-xs whitespace-pre-wrap break-all max-h-40 overflow-y-auto opacity-80">{msg.raw}</pre>
+            </details>
+          )}
         </div>
       </div>
     );

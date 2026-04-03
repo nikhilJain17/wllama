@@ -10,25 +10,70 @@ export type CodeState = { html: string; css: string };
 
 export type ChatMessage =
   | { role: 'user'; content: string }
-  | { role: 'assistant'; status: 'loading' | 'done' | 'error' };
+  | { role: 'assistant'; status: 'loading' | 'done' | 'error'; raw?: string };
 
 const modelManager = new ModelManager();
 const wllama = new Wllama(WLLAMA_CONFIG_PATHS);
 
+function extractStringValue(text: string, key: string): string {
+  const keyIdx = text.indexOf(`"${key}"`);
+  if (keyIdx === -1) return '';
+  const colonIdx = text.indexOf(':', keyIdx);
+  if (colonIdx === -1) return '';
+  const afterColon = text.slice(colonIdx + 1).trimStart();
+  if (!afterColon.startsWith('"')) return '';
+  let result = '';
+  let i = 1;
+  while (i < afterColon.length) {
+    if (afterColon[i] === '\\' && i + 1 < afterColon.length) {
+      const next = afterColon[i + 1];
+      if (next === 'n') result += '\n';
+      else if (next === '"') result += '"';
+      else if (next === '\\') result += '\\';
+      else if (next === 't') result += '\t';
+      else result += next;
+      i += 2;
+    } else if (afterColon[i] === '"') {
+      break;
+    } else {
+      result += afterColon[i];
+      i++;
+    }
+  }
+  return result;
+}
+
 function parseCode(raw: string): CodeState | null {
-  const attempt = (s: string) => {
+  // Strip markdown fences
+  const stripped = raw.replace(/```[a-z]*\n?/g, '').trim();
+
+  const tryJSON = (s: string) => {
     try {
       const obj = JSON.parse(s);
-      if (typeof obj === 'object' && obj !== null) return obj as CodeState;
+      if (obj && typeof obj === 'object' && ('html' in obj || 'css' in obj)) {
+        return { html: String(obj.html ?? ''), css: String(obj.css ?? '') };
+      }
     } catch {}
     return null;
   };
-  // Direct parse
-  const direct = attempt(raw.trim());
+
+  // 1. Direct JSON parse
+  const direct = tryJSON(stripped);
   if (direct) return direct;
-  // Extract first {...} block
-  const match = raw.match(/\{[\s\S]*\}/);
-  if (match) return attempt(match[0]);
+
+  // 2. Extract first {...} block and try parsing
+  const match = stripped.match(/\{[\s\S]*\}/);
+  if (match) {
+    const fromBlock = tryJSON(match[0]);
+    if (fromBlock) return fromBlock;
+  }
+
+  // 3. Fallback: extract string values char-by-char (handles unescaped newlines etc.)
+  const target = match ? match[0] : stripped;
+  const html = extractStringValue(target, 'html');
+  const css = extractStringValue(target, 'css');
+  if (html || css) return { html, css };
+
   return null;
 }
 
@@ -98,6 +143,7 @@ export default function App() {
           next[next.length - 1] = {
             role: 'assistant',
             status: parsed ? 'done' : 'error',
+            raw: parsed ? undefined : result,
           };
           return next;
         });
