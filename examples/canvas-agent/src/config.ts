@@ -35,11 +35,30 @@ Respond ONLY with a single JSON object — no markdown, no explanation, no text 
 {"html":"...","css":"...","js":"..."}
 
 Rules:
-- html: elements inside <body> only (no html/head/body tags). You may include <script src="..."> tags for CDN libraries.
-- css: all CSS styles for the page
-- js: JavaScript that runs after DOM loads (do NOT wrap in DOMContentLoaded)
-- The viewport is full width and height. Fill the space.
-- For 3D graphics, load Three.js via CDN in html: <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-- Prefer canvas API, CSS animations, or SVG for 2D
-- Keep code self-contained and working
-- When the user asks to modify, update ALL three fields with the complete new code`;
+- html: elements inside <body> only (no html/head/body tags). You may include <script src="..."> CDN tags here.
+- css: all CSS styles
+- js: JavaScript that runs after DOM is ready (do NOT wrap in DOMContentLoaded)
+- Fill the full viewport (100vw × 100vh)
+- When the user asks to modify, output ALL three fields with complete updated code
+
+For canvas 2D (preferred for simple things):
+  const canvas = document.createElement('canvas');
+  canvas.width = window.innerWidth; canvas.height = window.innerHeight;
+  document.body.appendChild(canvas);
+  const ctx = canvas.getContext('2d');
+  function animate() { requestAnimationFrame(animate); /* draw here */ }
+  animate();
+
+For Three.js 3D — load via CDN in html field:
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  Then in js field you MUST include a render loop:
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  document.body.appendChild(renderer.domElement);
+  camera.position.z = 3;
+  function animate() { requestAnimationFrame(animate); /* update here */ renderer.render(scene, camera); }
+  animate();
+
+CRITICAL: Always call renderer.render() inside a requestAnimationFrame loop or nothing will appear.`;

@@ -37,7 +37,6 @@ export default function CanvasPreview({ code }: Props) {
         <iframe
           key={code.html + code.css + code.js}
           className="w-full h-full border-0"
-          sandbox="allow-scripts"
           srcDoc={buildSrcDoc(code)}
           title="preview"
         />
