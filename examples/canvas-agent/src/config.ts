@@ -27,6 +27,21 @@ export const MODELS = [
     url: 'https://huggingface.co/hugging-quants/Llama-3.2-1B-Instruct-Q4_K_M-GGUF/resolve/main/llama-3.2-1b-instruct-q4_k_m.gguf',
     size: 807690656,
   },
+  {
+    label: 'Llama 3.2 3B — (~2.0GB)',
+    url: 'https://huggingface.co/hugging-quants/Llama-3.2-3B-Instruct-Q4_K_M-GGUF/resolve/main/llama-3.2-3b-instruct-q4_k_m.gguf',
+    size: 2019377152,
+  },
+  {
+    label: 'Qwen3 4B — (~2.6GB)',
+    url: 'https://huggingface.co/unsloth/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_K_M.gguf',
+    size: 2578612224,
+  },
+  {
+    label: 'Qwen2.5 7B — (~4.7GB)',
+    url: 'https://huggingface.co/bartowski/Qwen2.5-7B-Instruct-GGUF/resolve/main/Qwen2.5-7B-Instruct-Q4_K_M.gguf',
+    size: 4685144064,
+  },
 ];
 
 export const SYSTEM_PROMPT = `You are a creative web coding agent. The user describes what they want rendered in a browser preview.
