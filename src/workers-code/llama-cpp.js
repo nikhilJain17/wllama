@@ -205,6 +205,24 @@ const heapfsAlloc = (name, size) => {
   return file.id;
 };
 
+// Free a file from wllama heapfs
+const heapfsFree = (name) => {
+  const m = Module;
+  const file = fsNameToFile[name];
+  if (!file) throw new Error(`File ${name} not found in heapfs`);
+  m.FS.unlink('/models/' + name);
+  m._free(file.ptr);
+  delete fsIdToFile[file.id];
+  delete fsNameToFile[name];
+};
+
+// Free all files from wllama heapfs
+const heapfsFreeAll = () => {
+  for (const name of Object.keys(fsNameToFile)) {
+    heapfsFree(name);
+  }
+};
+
 // Add new file to wllama heapfs, return number of written bytes
 const heapfsWrite = (id, buffer, offset) => {
   const m = Module;
@@ -359,6 +377,10 @@ onmessage = async (e) => {
         outputLen
       );
       outputBuffer.set(outputSrcView, 0); // copy it
+      // After model is loaded into WebGPU buffers, the WASM heap copy is no longer needed
+      if (argAction === 'load' && Module.WebGPU) {
+        heapfsFreeAll();
+      }
       msg({ callbackId, result: outputBuffer }, [outputBuffer.buffer]);
     } catch (err) {
       msg({ callbackId, err });
