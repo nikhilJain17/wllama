@@ -218,8 +218,31 @@ const heapfsFree = (name) => {
 
 // Free all files from wllama heapfs
 const heapfsFreeAll = () => {
+  const mb = (bytes) => (bytes / 1024 / 1024).toFixed(1) + ' MB';
+  const wasmHeapBefore = Module.HEAPU8.buffer.byteLength;
+  const files = Object.entries(fsNameToFile).map(([name, f]) => ({ name, size: f.size }));
+  const totalFreed = files.reduce((sum, f) => sum + f.size, 0);
+
+  msg({ verb: 'console.log', args: [
+    `[HeapFS] Freeing ${files.length} file(s) from WASM heap (${mb(totalFreed)} total)\n` +
+    files.map(f => `  ${f.name}: ${mb(f.size)}`).join('\n')
+  ]});
+  msg({ verb: 'console.log', args: [
+    `[HeapFS] WASM heap before free: ${mb(wasmHeapBefore)} total`
+  ]});
+
   for (const name of Object.keys(fsNameToFile)) {
     heapfsFree(name);
+  }
+
+  const wasmHeapAfter = Module.HEAPU8.buffer.byteLength;
+  msg({ verb: 'console.log', args: [
+    `[HeapFS] WASM heap after free: ${mb(wasmHeapAfter)} total (freed ${mb(totalFreed)} from allocator pool; heap cannot shrink)`
+  ]});
+  if (Module.WebGPU) {
+    msg({ verb: 'console.log', args: [
+      `[HeapFS] WebGPU: ~${mb(totalFreed)} uploaded to GPU VRAM (browser does not expose exact VRAM usage)`
+    ]});
   }
 };
 
