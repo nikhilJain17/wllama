@@ -72,6 +72,11 @@ extern "C" const char *wllama_malloc(size_t size, uint32_t)
   return input_buffer.data();
 }
 
+extern "C" void wllama_free(void *ptr)
+{
+  free(ptr);
+}
+
 extern "C" const char *wllama_start()
 {
   try

@@ -211,7 +211,7 @@ const heapfsFree = (name) => {
   const file = fsNameToFile[name];
   if (!file) throw new Error(`File ${name} not found in heapfs`);
   m.FS.unlink('/models/' + name);
-  m._free(file.ptr);
+  m._wllama_free(file.ptr);
   delete fsIdToFile[file.id];
   delete fsNameToFile[name];
 };
@@ -223,27 +223,17 @@ const heapfsFreeAll = () => {
   const files = Object.entries(fsNameToFile).map(([name, f]) => ({ name, size: f.size }));
   const totalFreed = files.reduce((sum, f) => sum + f.size, 0);
 
-  msg({ verb: 'console.log', args: [
-    `[HeapFS] Freeing ${files.length} file(s) from WASM heap (${mb(totalFreed)} total)\n` +
-    files.map(f => `  ${f.name}: ${mb(f.size)}`).join('\n')
-  ]});
-  msg({ verb: 'console.log', args: [
-    `[HeapFS] WASM heap before free: ${mb(wasmHeapBefore)} total`
-  ]});
+  console.log(`[HeapFS] Freeing ${files.length} file(s) from WASM heap (${mb(totalFreed)} total)`);
+  files.forEach(f => console.log(`[HeapFS]   ${f.name}: ${mb(f.size)}`));
+  console.log(`[HeapFS] WASM heap before free: ${mb(wasmHeapBefore)}`);
 
   for (const name of Object.keys(fsNameToFile)) {
     heapfsFree(name);
   }
 
   const wasmHeapAfter = Module.HEAPU8.buffer.byteLength;
-  msg({ verb: 'console.log', args: [
-    `[HeapFS] WASM heap after free: ${mb(wasmHeapAfter)} total (freed ${mb(totalFreed)} from allocator pool; heap cannot shrink)`
-  ]});
-  if (Module.WebGPU) {
-    msg({ verb: 'console.log', args: [
-      `[HeapFS] WebGPU: ~${mb(totalFreed)} uploaded to GPU VRAM (browser does not expose exact VRAM usage)`
-    ]});
-  }
+  console.log(`[HeapFS] WASM heap after free: ${mb(wasmHeapAfter)} (heap cannot shrink, but ${mb(totalFreed)} returned to allocator)`);
+  console.log(`[HeapFS] WebGPU active: ~${mb(totalFreed)} should now be in GPU VRAM`);
 };
 
 // Add new file to wllama heapfs, return number of written bytes
@@ -296,6 +286,7 @@ onmessage = async (e) => {
     return;
   }
 
+  console.log("Processing verb " + verb);
   if (verb === 'module.init') {
     const argMainScriptBlob = args[0];
     try {
@@ -380,6 +371,7 @@ onmessage = async (e) => {
   if (verb === 'wllama.action') {
     const argAction = args[0];
     const argEncodedMsg = args[1];
+    console.log("Processing wllama action: " + argAction);
     try {
       const inputPtr = await wllamaMalloc(argEncodedMsg.byteLength, 0);
       // copy data to wasm heap
@@ -401,11 +393,14 @@ onmessage = async (e) => {
       );
       outputBuffer.set(outputSrcView, 0); // copy it
       // After model is loaded into WebGPU buffers, the WASM heap copy is no longer needed
-      if (argAction === 'load' && Module.WebGPU) {
+      const useWebGPU = RUN_OPTIONS.pathConfig['wllama.useWebGPU'];
+      console.log("[HeapFS] action=load useWebGPU=" + useWebGPU);
+      if (argAction === 'load' && useWebGPU) {
         heapfsFreeAll();
       }
       msg({ callbackId, result: outputBuffer }, [outputBuffer.buffer]);
     } catch (err) {
+      console.log("Error while processing action: " + argAction + ", error: " + err);
       msg({ callbackId, err });
     }
     return;

@@ -644,10 +644,12 @@ export class Wllama {
       ? {
           'wllama.wasm': absoluteUrl(multiThreadPath!),
           'wllama.buildType': hasJspi ? 'jspi' : 'asyncify',
+          'wllama.useWebGPU': this.useWebGPU,
         }
       : {
           'wllama.wasm': absoluteUrl(singleThreadPath!),
           'wllama.buildType': hasJspi ? 'jspi' : 'asyncify',
+          'wllama.useWebGPU': this.useWebGPU,
         };
     this.proxy = new ProxyToWorker(
       mPathConfig,
