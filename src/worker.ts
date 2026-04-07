@@ -28,6 +28,7 @@ interface TaskParam {
     | 'module.init'
     | 'fs.alloc'
     | 'fs.write'
+    | 'fs.opfs-alloc'
     | 'wllama.start'
     | 'wllama.action'
     | 'wllama.exit'
@@ -68,7 +69,9 @@ export class ProxyToWorker {
     this.suppressNativeLog = suppressNativeLog;
   }
 
-  async moduleInit(ggufFiles: { name: string; blob: Blob }[]): Promise<void> {
+  async moduleInit(
+    ggufFiles: { name: string; blob?: Blob; opfsCacheName?: string }[]
+  ): Promise<void> {
     if (!this.pathConfig['wllama.wasm']) {
       throw new Error('"wllama.wasm" is missing from pathConfig');
     }
@@ -123,19 +126,17 @@ export class ProxyToWorker {
       callbackId: this.taskId++,
     });
 
-    // allocate all files
-    const nativeFiles: ({ id: number } & (typeof ggufFiles)[number])[] = [];
     for (const file of ggufFiles) {
-      const id = await this.fileAlloc(file.name, file.blob.size);
-      nativeFiles.push({ id, ...file });
+      if (file.opfsCacheName) {
+        // OPFS path (WebGPU): open the OPFS sync handle in the worker and register
+        // it in MEMFS. No data is copied to the WASM heap.
+        await this.opfsFileAlloc(file.name, file.opfsCacheName);
+      } else if (file.blob) {
+        // Heap path: stream the blob to the WASM heap via HeapFS.
+        const id = await this.fileAlloc(file.name, file.blob.size);
+        await this.fileWrite(id, file.blob);
+      }
     }
-
-    // stream files
-    await Promise.all(
-      nativeFiles.map((file) => {
-        return this.fileWrite(file.id, file.blob);
-      })
-    );
 
     return res;
   }
@@ -186,6 +187,21 @@ export class ProxyToWorker {
   }
 
   ///////////////////////////////////////
+
+  /**
+   * Open an OPFS sync handle for a cached model file and register it in MEMFS.
+   * No data is streamed to the WASM heap; reads are served from disk.
+   */
+  private async opfsFileAlloc(
+    logicalName: string,
+    opfsCacheName: string
+  ): Promise<void> {
+    await this.pushTask({
+      verb: 'fs.opfs-alloc',
+      args: [logicalName, opfsCacheName],
+      callbackId: this.taskId++,
+    });
+  }
 
   /**
    * Allocate a new file in heapfs

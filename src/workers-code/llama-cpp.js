@@ -127,6 +127,8 @@ const fsNameToFile = {}; // map Name => File
 const fsIdToFile = {}; // map ID => File
 let currFileId = 0;
 
+const opfsHandles = {}; // map Name => { syncHandle, size } for OPFS-backed files
+
 // Patch and redirect memfs calls to wllama
 const patchMEMFS = () => {
   const m = Module;
@@ -155,6 +157,14 @@ const patchMEMFS = () => {
     length,
     position
   ) {
+    const name = stream.node.name;
+    if (opfsHandles[name]) {
+      const { syncHandle, size } = opfsHandles[name];
+      const toRead = Math.min(length, size - position);
+      if (toRead <= 0) return 0;
+      const view = new Uint8Array(buffer.buffer, buffer.byteOffset + offset, toRead);
+      return syncHandle.read(view, { at: position });
+    }
     patchStream(stream);
     return m.MEMFS.stream_ops._read(stream, buffer, offset, length, position);
   };
@@ -162,6 +172,16 @@ const patchMEMFS = () => {
 
   // replace "llseek" functions
   m.MEMFS.stream_ops.llseek = function (stream, offset, whence) {
+    const name = stream.node.name;
+    if (opfsHandles[name]) {
+      const { size } = opfsHandles[name];
+      let newPos = offset;
+      if (whence === 1) newPos += stream.position; // SEEK_CUR
+      if (whence === 2) newPos += size; // SEEK_END
+      if (newPos < 0) throw new Error('SEEK before start of file');
+      stream.position = newPos;
+      return newPos;
+    }
     patchStream(stream);
     return m.MEMFS.stream_ops._llseek(stream, offset, whence);
   };
@@ -169,8 +189,21 @@ const patchMEMFS = () => {
 
   // replace "mmap" functions
   m.MEMFS.stream_ops.mmap = function (stream, length, position, prot, flags) {
-    patchStream(stream);
     const name = stream.node.name;
+    if (opfsHandles[name]) {
+      // OPFS-backed files must never be mmap'd — that would copy the entire model
+      // onto the WASM heap, defeating the whole point of the OPFS path.
+      // use_mmap=false is set in wllama.ts for WebGPU loads, so llama.cpp should
+      // never reach this branch. If it does, throw immediately so the bug is visible.
+      console.error(`[OPFSFS] mmap called on OPFS-backed file "${name}" (length=${length}, position=${position}). This should never happen when use_mmap=false is set. Please report this as a bug.`);
+      throw new Error(
+        `[wllama] mmap called on OPFS-backed file "${name}". ` +
+        `This should never happen when use_mmap=false is set. ` +
+        `Please report this as a bug.`
+      );
+    }
+    console.debug(`[OPFSFS] mmap: file="${name}", length=${length}, position=${position}`);
+    patchStream(stream);
     if (fsNameToFile[name]) {
       const f = fsNameToFile[name];
       return {
@@ -232,8 +265,59 @@ const heapfsFreeAll = () => {
   }
 
   const wasmHeapAfter = Module.HEAPU8.buffer.byteLength;
-  console.log(`[HeapFS] WASM heap after free: ${mb(wasmHeapAfter)} (heap cannot shrink, but ${mb(totalFreed)} returned to allocator)`);
-  console.log(`[HeapFS] WebGPU active: ~${mb(totalFreed)} should now be in GPU VRAM`);
+};
+
+// Open an OPFS sync handle for a cached model file and register it in MEMFS.
+// The file data stays on disk; MEMFS reads are served directly from the sync handle.
+const opfsfsAlloc = async (logicalName, opfsCacheFileName) => {
+  const mb = (bytes) => (bytes / 1024 / 1024).toFixed(1) + ' MB';
+  console.log(`[OPFSFS] opfsfsAlloc: logicalName="${logicalName}" opfsCacheFileName="${opfsCacheFileName}"`);
+
+  const opfsRoot = await navigator.storage.getDirectory();
+  console.log(`[OPFSFS] opfsfsAlloc: got OPFS root`);
+
+  const cacheDir = await opfsRoot.getDirectoryHandle('cache');
+  console.log(`[OPFSFS] opfsfsAlloc: got cache directory handle`);
+
+  const fileHandle = await cacheDir.getFileHandle(opfsCacheFileName);
+  console.log(`[OPFSFS] opfsfsAlloc: got file handle for "${opfsCacheFileName}"`);
+
+  const syncHandle = await fileHandle.createSyncAccessHandle();
+  const size = syncHandle.getSize();
+  console.log(`[OPFSFS] opfsfsAlloc: opened sync handle, file size = ${mb(size)} (${size} bytes)`);
+
+  opfsHandles[logicalName] = { syncHandle, size };
+  console.log(`[OPFSFS] opfsfsAlloc: registered "${logicalName}" in opfsHandles, total handles = ${Object.keys(opfsHandles).length}`);
+
+  // Create a zero-byte placeholder in MEMFS so llama.cpp can open the path.
+  Module['FS_createDataFile']('/models', logicalName, new Uint8Array(0), true, true, true);
+  // Set usedBytes so fstat() returns the real file size.
+  Module.FS.lookupPath('/models/' + logicalName).node.usedBytes = size;
+  console.log(`[OPFSFS] opfsfsAlloc: created MEMFS placeholder at /models/${logicalName} with usedBytes=${size}`);
+
+  return size;
+};
+
+// Close all OPFS sync handles and remove their MEMFS placeholders.
+const opfsFreeAll = () => {
+  const names = Object.keys(opfsHandles);
+  if (names.length === 0) {
+    console.log(`[OPFSFS] opfsFreeAll: no OPFS handles to free (heap path was used)`);
+    return;
+  }
+  console.log(`[OPFSFS] opfsFreeAll: freeing ${names.length} OPFS handle(s): ${names.join(', ')}`);
+  for (const [name, { syncHandle }] of Object.entries(opfsHandles)) {
+    try {
+      console.log(`[OPFSFS] opfsFreeAll: closing handle for "${name}"`);
+      syncHandle.close();
+      Module.FS.unlink('/models/' + name);
+      console.log(`[OPFSFS] opfsFreeAll: unlinked /models/${name}`);
+    } catch (e) {
+      console.warn('[OPFSFS] Error freeing handle for ' + name + ': ' + e);
+    }
+    delete opfsHandles[name];
+  }
+  console.log(`[OPFSFS] opfsFreeAll: done`);
 };
 
 // Add new file to wllama heapfs, return number of written bytes
@@ -358,6 +442,21 @@ onmessage = async (e) => {
     return;
   }
 
+  if (verb === 'fs.opfs-alloc') {
+    const argLogicalName = args[0];
+    const argOpfsCacheFileName = args[1];
+    console.log(`[OPFSFS] received fs.opfs-alloc: logicalName="${argLogicalName}" opfsCacheFileName="${argOpfsCacheFileName}"`);
+    try {
+      const size = await opfsfsAlloc(argLogicalName, argOpfsCacheFileName);
+      console.log(`[OPFSFS] fs.opfs-alloc complete: "${argLogicalName}" size=${size}`);
+      msg({ callbackId, result: { size } });
+    } catch (err) {
+      console.error(`[OPFSFS] fs.opfs-alloc failed for "${argLogicalName}": ${err}`);
+      msg({ callbackId, err });
+    }
+    return;
+  }
+
   if (verb === 'wllama.start') {
     try {
       const result = await wllamaStart();
@@ -371,7 +470,11 @@ onmessage = async (e) => {
   if (verb === 'wllama.action') {
     const argAction = args[0];
     const argEncodedMsg = args[1];
+    const mb = (bytes) => (bytes / 1024 / 1024).toFixed(1) + ' MB';
     console.log("Processing wllama action: " + argAction);
+    if (argAction === 'load') {
+      console.log('WASM heap before load:', mb(Module.HEAPU8.buffer.byteLength));
+    }
     try {
       const inputPtr = await wllamaMalloc(argEncodedMsg.byteLength, 0);
       // copy data to wasm heap
@@ -392,11 +495,24 @@ onmessage = async (e) => {
         outputLen
       );
       outputBuffer.set(outputSrcView, 0); // copy it
-      // After model is loaded into WebGPU buffers, the WASM heap copy is no longer needed
+      if (argAction === 'load') {
+        console.log('WASM heap linear memory (high-water mark):', mb(Module.HEAPU8.buffer.byteLength));
+        // mallinfo gives actual in-use bytes inside the heap allocator
+        const info = Module._mallinfo ? Module._mallinfo() : null;
+        if (info) {
+          const uordblks = Module.HEAP32[(info >> 2) + 3]; // uordblks = bytes in use
+          console.log('WASM heap actually in-use (mallinfo.uordblks):', mb(uordblks));
+        } else {
+          console.log('WASM heap in-use: mallinfo not available');
+        }
+      }
+      // After model is loaded into WebGPU buffers, the WASM heap copy and OPFS handles
+      // are no longer needed.
       const useWebGPU = RUN_OPTIONS.pathConfig['wllama.useWebGPU'];
       console.log("[HeapFS] action=load useWebGPU=" + useWebGPU);
       if (argAction === 'load' && useWebGPU) {
-        heapfsFreeAll();
+        heapfsFreeAll(); // no-op when model was loaded from OPFS
+        opfsFreeAll();   // no-op when model was loaded from WASM heap
       }
       msg({ callbackId, result: outputBuffer }, [outputBuffer.buffer]);
     } catch (err) {

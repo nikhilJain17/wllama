@@ -233,8 +233,12 @@ glue_msg_load_res action_load(app_t &app, const char *req_raw)
   }
 
   // load model
-  app.model = llama_model_load_from_splits(
-      model_paths_ptrs.data(), model_paths_ptrs.size(), mparams);
+  if (model_paths_ptrs.size() == 1) {
+    app.model = llama_model_load_from_file(model_paths_ptrs[0], mparams);
+  } else {
+    app.model = llama_model_load_from_splits(
+        model_paths_ptrs.data(), model_paths_ptrs.size(), mparams);
+  }
   if (app.model == nullptr)
   {
     free_all(app);
