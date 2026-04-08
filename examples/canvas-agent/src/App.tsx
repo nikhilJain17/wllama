@@ -83,7 +83,10 @@ export default function App() {
   const [isLoadingModel, setIsLoadingModel] = useState(false);
   const [selectedModelIdx, setSelectedModelIdx] = useState(0);
   const [loadedModelLabel, setLoadedModelLabel] = useState('');
-  const [runtimeInfo, setRuntimeInfo] = useState<{ webgpu: boolean; multithread: boolean } | null>(null);
+  const [runtimeInfo, setRuntimeInfo] = useState<{
+    webgpu: boolean;
+    multithread: boolean;
+  } | null>(null);
 
   const [code, setCode] = useState<CodeState>({ html: '', css: '' });
   const [displayMessages, setDisplayMessages] = useState<ChatMessage[]>([]);
@@ -108,7 +111,10 @@ export default function App() {
       }
       await wllama.loadModel(cachedModel, { n_ctx: 4096 });
       setLoadedModelLabel(model.label.split('—')[0].trim());
-      setRuntimeInfo({ webgpu: wllama.usingWebGPU(), multithread: wllama.isMultithread() });
+      setRuntimeInfo({
+        webgpu: wllama.usingWebGPU(),
+        multithread: wllama.isMultithread(),
+      });
       setModelLoaded(true);
     } catch (e) {
       alert(`Failed to load model: ${(e as Error).message ?? 'unknown error'}`);
@@ -129,13 +135,10 @@ export default function App() {
       setIsGenerating(true);
 
       try {
-        const result = await wllama.createChatCompletion(
-          llmMessages.current,
-          {
-            nPredict: 2048,
-            sampling: { temp: 0.1 },
-          }
-        );
+        const result = await wllama.createChatCompletion(llmMessages.current, {
+          nPredict: 2048,
+          sampling: { temp: 0.1 },
+        });
 
         llmMessages.current.push({ role: 'assistant', content: result });
 
@@ -172,9 +175,17 @@ export default function App() {
         </span>
         {modelLoaded && runtimeInfo && (
           <div className="flex items-center gap-2">
-            <span className="badge badge-success badge-sm">{loadedModelLabel}</span>
-            <span className={`badge badge-sm ${runtimeInfo.webgpu ? 'badge-warning' : 'badge-neutral'}`}>
-              {runtimeInfo.webgpu ? '⚡ WebGPU' : runtimeInfo.multithread ? '🧵 MT' : '🐢 WASM'}
+            <span className="badge badge-success badge-sm">
+              {loadedModelLabel}
+            </span>
+            <span
+              className={`badge badge-sm ${runtimeInfo.webgpu ? 'badge-warning' : 'badge-neutral'}`}
+            >
+              {runtimeInfo.webgpu
+                ? '⚡ WebGPU'
+                : runtimeInfo.multithread
+                  ? '🧵 MT'
+                  : '🐢 WASM'}
             </span>
           </div>
         )}

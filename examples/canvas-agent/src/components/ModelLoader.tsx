@@ -51,7 +51,9 @@ export default function ModelLoader({
               onChange={() => onSelectIdx(i)}
             />
             <div>
-              <div className="font-medium text-sm">{m.label.split('—')[0].trim()}</div>
+              <div className="font-medium text-sm">
+                {m.label.split('—')[0].trim()}
+              </div>
               <div className="text-xs text-base-content/50">{fmt(m.size)}</div>
             </div>
           </label>

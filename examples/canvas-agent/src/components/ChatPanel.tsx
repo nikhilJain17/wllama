@@ -7,7 +7,11 @@ interface Props {
   isGenerating: boolean;
 }
 
-function AssistantBubble({ msg }: { msg: Extract<ChatMessage, { role: 'assistant' }> }) {
+function AssistantBubble({
+  msg,
+}: {
+  msg: Extract<ChatMessage, { role: 'assistant' }>;
+}) {
   if (msg.status === 'loading') {
     return (
       <div className="chat chat-start">
@@ -25,8 +29,12 @@ function AssistantBubble({ msg }: { msg: Extract<ChatMessage, { role: 'assistant
           <div>✗ Could not parse output</div>
           {msg.raw && (
             <details className="mt-1">
-              <summary className="cursor-pointer text-xs opacity-70">show raw</summary>
-              <pre className="mt-1 text-xs whitespace-pre-wrap break-all max-h-40 overflow-y-auto opacity-80">{msg.raw}</pre>
+              <summary className="cursor-pointer text-xs opacity-70">
+                show raw
+              </summary>
+              <pre className="mt-1 text-xs whitespace-pre-wrap break-all max-h-40 overflow-y-auto opacity-80">
+                {msg.raw}
+              </pre>
             </details>
           )}
         </div>
@@ -65,7 +73,9 @@ export default function ChatPanel({ messages, onSend, isGenerating }: Props) {
           <div className="flex flex-col items-center justify-center h-full text-center text-base-content/40 text-sm gap-2">
             <span className="text-3xl">💬</span>
             <p>Describe something to render.</p>
-            <p className="text-xs">Try: "a spinning rainbow cube" or "starfield animation"</p>
+            <p className="text-xs">
+              Try: "a spinning rainbow cube" or "starfield animation"
+            </p>
           </div>
         )}
         {messages.map((msg, i) =>

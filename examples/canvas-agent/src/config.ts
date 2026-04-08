@@ -1,9 +1,9 @@
-import wllamaSingle from '@wllama/wllama/src/single-thread/wllama.wasm?url';
-import wllamaMulti from '@wllama/wllama/src/multi-thread/wllama.wasm?url';
+import wllamaAsyncifySingle from '@wllama/wllama/src/asyncify-single-thread/wllama.wasm?url';
+import wllamaAsyncifyMulti from '@wllama/wllama/src/asyncify-multi-thread/wllama.wasm?url';
 
 export const WLLAMA_CONFIG_PATHS = {
-  'single-thread/wllama.wasm': wllamaSingle,
-  'multi-thread/wllama.wasm': wllamaMulti,
+  'asyncify/single-thread/wllama.wasm': wllamaAsyncifySingle,
+  'asyncify/multi-thread/wllama.wasm': wllamaAsyncifyMulti,
 };
 
 export const MODELS = [

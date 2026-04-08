@@ -58,11 +58,10 @@ export default function ModelScreen() {
     };
   }, []);
 
-  const onChange = (
-    key: 'nThreads' | 'nContext' | 'nPredict' | 'temperature'
-  ) => (e: any) => {
-    setParams({ ...currParams, [key]: parseFloat(e.target.value || -1) });
-  };
+  const onChange =
+    (key: 'nThreads' | 'nContext' | 'nPredict' | 'temperature') => (e: any) => {
+      setParams({ ...currParams, [key]: parseFloat(e.target.value || -1) });
+    };
 
   return (
     <ScreenWrapper>
@@ -135,7 +134,8 @@ export default function ModelScreen() {
 
         {currParams.preferWebGPU && effectiveWebGPUMemoryBudget && (
           <div className="text-sm opacity-80 mb-2">
-            Usable WebGPU Budget: {toHumanReadableSize(effectiveWebGPUMemoryBudget)}
+            Usable WebGPU Budget:{' '}
+            {toHumanReadableSize(effectiveWebGPUMemoryBudget)}
           </div>
         )}
 
