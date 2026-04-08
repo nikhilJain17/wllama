@@ -258,6 +258,27 @@ const opfsAlloc = async (logicalName, opfsCacheFileName) => {
 
 }
 
+const opfsFreeAll = () => {
+  const names = Object.keys(opfsHandles);
+  if (names.length === 0) {
+    console.debug(`[OPFS] opfsFreeAll: no OPFS handles to free`);
+    return;
+  }
+  console.debug(`[OPFS] opfsFreeAll: freeing ${names.length} OPFS handles: ${names.join(', ')}`);
+  for (const [name, { syncHandle }] of Object.entries(opfsHandles)) {
+    try {
+      console.debug(`[OPFS] opfsFreeAll: closing handle for "${name}"`);
+      syncHandle.close();
+      Module.FS.unlink('/models/' + name);
+      console.debug(`[OPFS] opfsFreeAll: successfully closed handle for "${name}"`);
+    } catch(e) {
+      console.warn('[OPFS] Error freeing ' + name + ": " + e);
+    }
+    delete opfsHandles[name];
+  }
+  console.debug(`[OPFS] opfsFreeAll: done`);
+}
+
 //////////////////////////////////////////////////////////////
 // MAIN CODE
 //////////////////////////////////////////////////////////////
