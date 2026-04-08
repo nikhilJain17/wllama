@@ -166,6 +166,16 @@ const patchMEMFS = () => {
     length,
     position
   ) {
+    const name = stream.node.name;
+    // OPFS-backed path for WebGPU 
+    if (opfsHandles[name]) {
+      const { syncHandle, size } = opfsHandles[name];
+      const toRead = Math.min(length, size - position);
+      if (toRead <= 0) return 0;
+      const view = new Uint8Array(buffer.buffer, buffer.byteOffset + offset, toRead);
+      return syncHandle.read(view, { at: position });
+    }
+    // WASM heap-backed path for WASM
     patchStream(stream);
     return m.MEMFS.stream_ops._read(stream, buffer, offset, length, position);
   };
@@ -173,6 +183,18 @@ const patchMEMFS = () => {
 
   // replace "llseek" functions
   m.MEMFS.stream_ops.llseek = function (stream, offset, whence) {
+    const name = stream.node.name;
+    // OPFS-backed path for WebGPU 
+    if (opfsHandles[name]) {
+      const { size } = opfsHandles[name];
+      let newPos = offset;
+      if (whence === 1) newPos += stream.position; // SEEK_CUR
+      if (whence === 2) newPos += size; // SEEK_END
+      if (newPos < 0) throw new Error('SEEK before start of file');
+      stream.position = newPos;
+      return newPos;
+    }
+    // WASM heap-backed path for WASM
     patchStream(stream);
     return m.MEMFS.stream_ops._llseek(stream, offset, whence);
   };
