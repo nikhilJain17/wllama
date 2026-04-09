@@ -1,8 +1,6 @@
-name: Deploy wllama to GitHub Pages
+name: Deploy wllama to your github pages
 
 on:
-  push:
-    branches: ["master"]
   workflow_dispatch:
 
 permissions:
@@ -19,28 +17,20 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
+          cache: "npm"
+          cache-dependency-path: examples/main/package-lock.json
 
-      - name: Build root wllama package
-        run: npm install && npm run build
-
-      - name: Build wllama chat example
-        run: npm install && npm run build
+      - name: Install deps
+        run: npm ci
         working-directory: examples/main
 
-      - name: Build canvas-agent example
-        run: npm install && npm run build
-        working-directory: examples/canvas-agent
+      - name: Build
+        run: npm run build
+        working-directory: examples/main
 
-      - name: Assemble dist
-        run: |
-          mkdir -p _site
-          cp -r examples/main/dist/. _site/
-          mkdir -p _site/canvas-agent
-          cp -r examples/canvas-agent/dist/. _site/canvas-agent/
-
-      - name: Deploy to gh-pages
+      - name: Deploy examples/main to gh-pages
         uses: JamesIves/github-pages-deploy-action@9d877eea73427180ae43cf98e8914934fe157a1a
         with:
           branch: gh-pages
-          folder: _site
+          folder: examples/main/dist
           clean: true
