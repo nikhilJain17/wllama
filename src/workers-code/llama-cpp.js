@@ -295,7 +295,7 @@ const opfsAlloc = async (logicalName, opfsCacheFileName) => {
     `[OPFS] registered sync handle for "${logicalName}", size="${mb(size)}"`
   );
 
-  // TODO(nikhil.jain) what is this for?
+  // Create a handle in MEMfs so Emscripten can refer to the file
   Module['FS_createDataFile'](
     '/models',
     logicalName,
