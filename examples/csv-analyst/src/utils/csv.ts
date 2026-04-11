@@ -58,7 +58,8 @@ function getColumnStats(headers: string[], rows: string[][]): string {
   return lines.join('\n');
 }
 
-const MAX_CHARS = 8000;
+// ~3000 chars ≈ ~750 tokens for raw rows, leaving plenty of room in a 4096-token context
+const MAX_CHARS = 3000;
 
 export function formatCSVForLLM(parsed: ParsedCSV): string {
   const { headers, rows, totalRows, filename } = parsed;

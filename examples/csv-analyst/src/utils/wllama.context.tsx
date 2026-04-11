@@ -142,7 +142,7 @@ export function WllamaProvider({ children }: { children: React.ReactNode }) {
       LOG('found cached model, size:', cached.size, 'files:', cached.files.length);
 
       LOG('calling wllama.loadModel...');
-      await wllama.loadModel(cached, { n_ctx: 2048 });
+      await wllama.loadModel(cached, { n_ctx: 4096 });
 
       const info: RuntimeInfo = {
         usingWebGPU: wllama.usingWebGPU(),
@@ -184,7 +184,7 @@ export function WllamaProvider({ children }: { children: React.ReactNode }) {
     stopSignal = false;
     try {
       const result = await wllama.createChatCompletion(messages, {
-        nPredict: 2048,
+        nPredict: 800,
         sampling: { temp: 0.3 },
         onNewToken(_token, _piece, currentText, optionals) {
           onToken(currentText);
