@@ -142,7 +142,12 @@ export function WllamaProvider({ children }: { children: React.ReactNode }) {
       LOG('found cached model, size:', cached.size, 'files:', cached.files.length);
 
       LOG('calling wllama.loadModel...');
-      await wllama.loadModel(cached, { n_ctx: 4096 });
+      await wllama.loadModel(cached, {
+        n_ctx: 4096,
+        flash_attn: true,
+        cache_type_k: 'q8_0',
+        cache_type_v: 'q8_0',
+      });
 
       const info: RuntimeInfo = {
         usingWebGPU: wllama.usingWebGPU(),
@@ -195,9 +200,15 @@ export function WllamaProvider({ children }: { children: React.ReactNode }) {
       onToken(result);
     } catch (e) {
       const msg = (e as Error).message ?? '';
-      if (!msg.includes('aborted')) {
-        ERR('completion error:', e);
-        alert(`Generation error: ${msg}`);
+      const isUserStop = msg.includes('aborted');
+      const isWasmAbort = msg.includes('abort signal from llama.cpp');
+      ERR('completion error:', e);
+      if (!isUserStop) {
+        alert(
+          isWasmAbort
+            ? 'The model ran out of memory during generation. Try a smaller model or upload a smaller CSV.'
+            : `Generation error: ${msg}`
+        );
       }
     }
     stopSignal = false;
