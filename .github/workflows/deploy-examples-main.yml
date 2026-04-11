@@ -31,12 +31,18 @@ jobs:
         run: npm install && npm run build
         working-directory: examples/canvas-agent
 
+      - name: Build csv-analyst example
+        run: npm install && npm run build
+        working-directory: examples/csv-analyst
+
       - name: Assemble dist
         run: |
           mkdir -p _site
           cp -r examples/main/dist/. _site/
           mkdir -p _site/canvas-agent
           cp -r examples/canvas-agent/dist/. _site/canvas-agent/
+          mkdir -p _site/csv-analyst
+          cp -r examples/csv-analyst/dist/. _site/csv-analyst/
 
       - name: Deploy to gh-pages
         uses: JamesIves/github-pages-deploy-action@9d877eea73427180ae43cf98e8914934fe157a1a
