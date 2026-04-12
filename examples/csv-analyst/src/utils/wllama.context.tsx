@@ -143,12 +143,7 @@ export function WllamaProvider({ children }: { children: React.ReactNode }) {
       LOG('found cached model, size:', cached.size, 'files:', cached.files.length);
 
       LOG('calling wllama.loadModel...');
-      await wllama.loadModel(cached, {
-        n_ctx: 4096,
-        flash_attn: true,
-        cache_type_k: 'q8_0',
-        cache_type_v: 'q8_0',
-      });
+      await wllama.loadModel(cached, { n_ctx: 4096 });
 
       const info: RuntimeInfo = {
         usingWebGPU: wllama.usingWebGPU(),
@@ -158,7 +153,6 @@ export function WllamaProvider({ children }: { children: React.ReactNode }) {
       setRuntimeInfo(info);
     } catch (e) {
       ERR('loadModel failed:', e);
-      try { await wllama.exit(); } catch (exitErr) { ERR('exit() also failed:', exitErr); }
       resetWllama();
       setLoadedModelUrl(null);
       setRuntimeInfo(null);
