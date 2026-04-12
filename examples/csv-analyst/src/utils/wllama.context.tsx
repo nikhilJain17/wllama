@@ -22,6 +22,7 @@ interface WllamaContextValue {
   downloadModel(url: string): Promise<void>;
   loadModel(url: string): Promise<void>;
   unloadModel(): Promise<void>;
+  removeModel(url: string): Promise<void>;
   isDownloading: boolean;
   isLoadingModel: boolean;
   loadedModelUrl: string | null;
@@ -167,6 +168,17 @@ export function WllamaProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const removeModel = async (url: string) => {
+    if (isDownloading || isLoadingModel || loadedModelUrl === url) return;
+    LOG('removeModel called, url:', url);
+    const freshModels = await modelManager.getModels();
+    const cached = freshModels.find((m) => m.url === url);
+    if (!cached) { LOG('removeModel: not in cache, nothing to do'); return; }
+    await cached.remove();
+    LOG('removeModel: removed', url);
+    await refreshCache();
+  };
+
   const unloadModel = async () => {
     LOG('unloadModel called');
     if (!loadedModelUrl) return;
@@ -227,6 +239,7 @@ export function WllamaProvider({ children }: { children: React.ReactNode }) {
         downloadModel,
         loadModel,
         unloadModel,
+        removeModel,
         isDownloading,
         isLoadingModel,
         loadedModelUrl,

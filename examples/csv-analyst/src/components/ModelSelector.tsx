@@ -15,7 +15,7 @@ const TIER_BADGE: Record<string, string> = {
 };
 
 function ModelCard({ model }: { model: ModelInfo }) {
-  const { downloadModel, loadModel, unloadModel, isDownloading, isLoadingModel } = useWllama();
+  const { downloadModel, loadModel, unloadModel, removeModel, isDownloading, isLoadingModel } = useWllama();
   const busy = isDownloading || isLoadingModel;
   const percent = Math.round((model.downloadPercent ?? 0) * 100);
 
@@ -39,7 +39,7 @@ function ModelCard({ model }: { model: ModelInfo }) {
             <p className="text-xs opacity-50 mt-0.5">{toHumanSize(model.size)}</p>
           </div>
 
-          <div className="flex-shrink-0">
+          <div className="flex-shrink-0 flex items-center gap-1">
             {model.state === ModelState.NOT_DOWNLOADED && (
               <button
                 className="btn btn-sm btn-primary btn-outline"
@@ -50,13 +50,27 @@ function ModelCard({ model }: { model: ModelInfo }) {
               </button>
             )}
             {model.state === ModelState.READY && (
-              <button
-                className="btn btn-sm btn-primary"
-                onClick={() => loadModel(model.url)}
-                disabled={busy}
-              >
-                Load
-              </button>
+              <>
+                <button
+                  className="btn btn-sm btn-primary"
+                  onClick={() => loadModel(model.url)}
+                  disabled={busy}
+                >
+                  Load
+                </button>
+                <button
+                  className="btn btn-sm btn-ghost text-error"
+                  title="Delete from cache"
+                  onClick={() => {
+                    if (confirm(`Delete ${model.name} from cache?`)) removeModel(model.url);
+                  }}
+                  disabled={busy}
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                </button>
+              </>
             )}
             {model.state === ModelState.LOADED && (
               <button className="btn btn-sm btn-ghost" onClick={() => unloadModel()}>
