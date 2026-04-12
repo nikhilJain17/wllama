@@ -92,16 +92,17 @@ export const ANALYSIS_PROMPTS = [
   {
     label: 'Key statistics',
     prompt:
-      'What are the key statistics from this dataset? Highlight notable ranges, averages, and distributions.',
+      'What are the key statistics from this dataset? For each important column, cite specific numbers: exact min, max, mean, and any notable percentiles or counts. Do not make general statements without a number to back them up.',
   },
   {
     label: 'Trends & patterns',
     prompt:
-      'What trends and patterns do you observe? Are there any notable correlations between columns?',
+      'What trends and patterns do you observe? Support every claim with specific values from the data — e.g. "X increased from A to B" or "column X correlates with column Y, e.g. when X is N, Y tends to be M". Do not describe a trend without citing the numbers that show it.',
   },
   {
     label: 'Anomalies & outliers',
-    prompt: 'Are there any anomalies, outliers, or unusual values in this dataset?',
+    prompt:
+      'Are there any anomalies, outliers, or unusual values? For each one, name the column, give the specific value, and explain why it stands out (e.g. "value 999 is 4x the mean of 245"). Do not flag something as an outlier without showing the number.',
   },
   {
     label: 'Insights & recommendations',

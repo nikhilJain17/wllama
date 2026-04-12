@@ -12,7 +12,7 @@ interface Props {
 }
 
 const SYSTEM_PROMPT =
-  'You are a data analyst assistant. You will be given a dataset in CSV format along with column statistics. Analyze the data as requested. Be concise, precise, and highlight the most important findings. Use markdown for formatting when helpful.';
+  'You are a data analyst assistant. You will be given a dataset in CSV format along with column statistics. Analyze the data as requested. Always back up every claim with specific numbers from the data. Never make a general statement without citing an exact value, count, percentage, or range. Be concise and use markdown for formatting when helpful.';
 
 export default function AnalysisPanel({ parsedCSV }: Props) {
   const { createCompletion, stopCompletion, isGenerating } = useWllama();
