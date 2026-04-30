@@ -4,6 +4,7 @@ import {
   bufToText,
   cbToAsyncIter,
   checkEnvironmentCompatible,
+  isSupportMemory64,
   isString,
   isSupportMultiThread,
   joinBuffers,
@@ -46,6 +47,8 @@ export interface WllamaLogger {
   error: typeof console.error;
 }
 
+export type WllamaBackend = 'cpu' | 'webgpu';
+
 // TODO: bring back useCache
 export interface WllamaConfig {
   /**
@@ -77,9 +80,11 @@ export interface WllamaConfig {
    */
   modelManager?: ModelManager;
   /**
-   * Use the WebGPU backend if available.
+   * Execution backend.
+   *
+   * Default: 'cpu'
    */
-  preferWebGPU?: boolean;
+  backend?: WllamaBackend;
   /**
    * Disable llama.cpp performance metrics.
    *
@@ -95,7 +100,6 @@ export interface WllamaChatMessage {
 
 export interface AssetsPathConfig {
   'jspi/single-thread/wllama.wasm'?: string;
-  'jspi/multi-thread/wllama.wasm'?: string;
   'asyncify/single-thread/wllama.wasm'?: string;
   'asyncify/multi-thread/wllama.wasm'?: string;
 }
@@ -532,8 +536,7 @@ export class Wllama {
     const model = useCache
       ? await this.modelManager.getModelOrDownload(url, config)
       : await this.modelManager.downloadModel(url, config);
-    const blobs = await model.open();
-    return await this.loadModel(blobs, config);
+    return await this.loadModel(model, config);
   }
 
   /**
@@ -575,21 +578,7 @@ export class Wllama {
     if (this.proxy) {
       throw new WllamaError('Module is already initialized', 'load_error');
     }
-    if (this.config.preferWebGPU) {
-      if (navigator.gpu) {
-        if (await navigator.gpu.requestAdapter()) {
-          this.useWebGPU = true;
-        } else {
-          this.logger().warn(
-            'WebGPU backend requested but no adapter found, falling back to CPU'
-          );
-        }
-      } else {
-        this.logger().warn(
-          'WebGPU backend requested but WebGPU is not available, falling back to CPU'
-        );
-      }
-    }
+    this.useWebGPU = this.config.backend === 'webgpu';
 
     // When WebGPU is active and the model comes from the cache (a Model object),
     // we read directly from OPFS in the worker instead of streaming to WASM heap.
@@ -611,12 +600,18 @@ export class Wllama {
 
     // detect if we can use JSPI
     const hasJspi = 'Suspending' in WebAssembly;
-    const multiThreadPath = hasJspi
-      ? this.pathConfig['jspi/multi-thread/wllama.wasm']
-      : this.pathConfig['asyncify/multi-thread/wllama.wasm'];
-    const singleThreadPath = hasJspi
+    const hasMemory64 = hasJspi ? await isSupportMemory64() : false;
+    const useJspi = hasJspi && hasMemory64;
+    const multiThreadPath = this.pathConfig['asyncify/multi-thread/wllama.wasm'];
+    const singleThreadPath = useJspi
       ? this.pathConfig['jspi/single-thread/wllama.wasm']
       : this.pathConfig['asyncify/single-thread/wllama.wasm'];
+
+    if (hasJspi && !hasMemory64) {
+      this.logger().warn(
+        'JSPI is available but Memory64 is not supported, falling back to asyncify single-thread'
+      );
+    }
 
     // detect if we can use multi-thread
     if (await isSupportMultiThread()) {
@@ -653,12 +648,13 @@ export class Wllama {
     const mPathConfig = this.useMultiThread
       ? {
           'wllama.wasm': absoluteUrl(multiThreadPath!),
-          'wllama.buildType': hasJspi ? 'jspi' : 'asyncify',
+          'wllama.buildType': 'asyncify',
           'wllama.useWebGPU': this.useWebGPU,
         }
       : {
           'wllama.wasm': absoluteUrl(singleThreadPath!),
-          'wllama.buildType': hasJspi ? 'jspi' : 'asyncify',
+          'wllama.buildType': useJspi ? 'jspi' : 'asyncify',
+          'wllama.memory64': useJspi,
           'wllama.useWebGPU': this.useWebGPU,
         };
     this.proxy = new ProxyToWorker(
@@ -1435,7 +1431,7 @@ export class Wllama {
   async _testBenchmark(
     type: 'tg' | 'pp',
     nSamples: number
-  ): Promise<{ t_ms: number }> {
+  ): Promise<{ success: boolean; message: string; t_ms: number }> {
     this.checkModelLoaded();
     return await this.proxy.wllamaAction<GlueMsgTestBenchmarkRes>(
       'test_benchmark',
@@ -1450,7 +1446,9 @@ export class Wllama {
   /**
    * perplexity function, only used internally
    */
-  async _testPerplexity(tokens: number[]): Promise<{ ppl: number }> {
+  async _testPerplexity(
+    tokens: number[]
+  ): Promise<{ success: boolean; message: string; ppl: number }> {
     this.checkModelLoaded();
     return await this.proxy.wllamaAction<GlueMsgTestPerplexityRes>(
       'test_perplexity',

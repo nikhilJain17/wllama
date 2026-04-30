@@ -7,7 +7,7 @@ import {
   faWarning,
   faCheck,
 } from '@fortawesome/free-solid-svg-icons';
-import { DEFAULT_INFERENCE_PARAMS, MAX_GGUF_SIZE } from '../config';
+import { DEFAULT_INFERENCE_PARAMS } from '../config';
 import {
   getWebGPUMemoryBudget,
   toHumanReadableSize,
@@ -15,8 +15,9 @@ import {
 } from '../utils/utils';
 import { useEffect, useState } from 'react';
 import ScreenWrapper from './ScreenWrapper';
-import { DisplayedModel, isIQuantModel } from '../utils/displayed-model';
-import { isValidGgufFile } from '@wllama/wllama';
+import { DisplayedModel } from '../utils/displayed-model';
+import { isValidGgufFile } from '@reeselevine/wllama-webgpu';
+import { benchmark, perplexity } from '../utils/benchmark';
 
 const SPLIT_GGUF_REGEX = /^(.*)-(\d{5})-of-(\d{5})\.gguf$/;
 
@@ -55,17 +56,29 @@ export default function ModelScreen() {
   const [webgpuMemoryBudget, setWebgpuMemoryBudget] = useState<
     number | undefined
   >();
+  const [benchmarkBusy, setBenchmarkBusy] = useState(false);
+  const [benchmarkError, setBenchmarkError] = useState<string | null>(null);
+  const [benchmarkOutput, setBenchmarkOutput] = useState('');
   const {
     models,
     removeCachedModel,
     isLoadingModel,
     isDownloading,
+    getWllamaInstance,
     loadedModel,
     currParams,
     setParams,
   } = useWllama();
+  const [paramInputs, setParamInputs] = useState({
+    nThreads: currParams.nThreads < 1 ? '' : currParams.nThreads.toString(),
+    nContext: currParams.nContext.toString(),
+    nPredict: currParams.nPredict.toString(),
+    temperature: currParams.temperature.toString(),
+  });
 
   const blockModelBtn = !!(loadedModel || isDownloading || isLoadingModel);
+  const benchmarkBlocked =
+    benchmarkBusy || isDownloading || isLoadingModel || !loadedModel;
   const effectiveWebGPUMemoryBudget = webgpuMemoryBudget
     ? Math.floor(webgpuMemoryBudget * 0.8)
     : undefined;
@@ -90,10 +103,69 @@ export default function ModelScreen() {
     };
   }, []);
 
+  useEffect(() => {
+    setParamInputs({
+      nThreads: currParams.nThreads < 1 ? '' : currParams.nThreads.toString(),
+      nContext: currParams.nContext.toString(),
+      nPredict: currParams.nPredict.toString(),
+      temperature: currParams.temperature.toString(),
+    });
+  }, [currParams]);
+
   const onChange =
     (key: 'nThreads' | 'nContext' | 'nPredict' | 'temperature') => (e: any) => {
-      setParams({ ...currParams, [key]: parseFloat(e.target.value || -1) });
+      const value = e.target.value;
+      setParamInputs((prev) => ({ ...prev, [key]: value }));
+
+      if (value === '') {
+        if (key === 'nThreads') {
+          setParams({ ...currParams, nThreads: -1 });
+        }
+        return;
+      }
+
+      const nextValue = parseFloat(value);
+      if (Number.isNaN(nextValue)) return;
+      setParams({ ...currParams, [key]: nextValue });
     };
+
+  const onBlur =
+    (key: 'nThreads' | 'nContext' | 'nPredict' | 'temperature') => () => {
+      if (paramInputs[key] !== '') return;
+      const defaultValue = DEFAULT_INFERENCE_PARAMS[key];
+      setParams({ ...currParams, [key]: defaultValue });
+      setParamInputs((prev) => ({
+        ...prev,
+        [key]:
+          key === 'nThreads' && defaultValue < 1 ? '' : defaultValue.toString(),
+      }));
+    };
+
+  const runBenchmarkAction = async (action: 'benchmark' | 'perplexity') => {
+    if (benchmarkBlocked || !loadedModel) return;
+    setBenchmarkBusy(true);
+    setBenchmarkError(null);
+    setBenchmarkOutput('');
+    try {
+      const result =
+        action === 'benchmark'
+          ? await benchmark(
+              getWllamaInstance(),
+              loadedModel.hfModel,
+              currParams
+            )
+          : await perplexity(
+              getWllamaInstance(),
+              loadedModel.hfModel,
+              currParams
+            );
+      setBenchmarkOutput(result.markdown);
+    } catch (e) {
+      setBenchmarkError((e as any)?.message ?? `Failed to run ${action}`);
+    } finally {
+      setBenchmarkBusy(false);
+    }
+  };
 
   return (
     <ScreenWrapper>
@@ -109,7 +181,8 @@ export default function ModelScreen() {
             max="100"
             step="1"
             onChange={onChange('nThreads')}
-            value={currParams.nThreads < 1 ? '' : currParams.nThreads}
+            onBlur={onBlur('nThreads')}
+            value={paramInputs.nThreads}
             disabled={blockModelBtn}
           />
         </label>
@@ -122,7 +195,8 @@ export default function ModelScreen() {
             min="128"
             step="1"
             onChange={onChange('nContext')}
-            value={currParams.nContext}
+            onBlur={onBlur('nContext')}
+            value={paramInputs.nContext}
             disabled={blockModelBtn}
           />
         </label>
@@ -135,7 +209,8 @@ export default function ModelScreen() {
             min="10"
             step="1"
             onChange={onChange('nPredict')}
-            value={currParams.nPredict}
+            onBlur={onBlur('nPredict')}
+            value={paramInputs.nPredict}
           />
         </label>
 
@@ -147,7 +222,8 @@ export default function ModelScreen() {
             min="0.0"
             step="0.05"
             onChange={onChange('temperature')}
-            value={currParams.temperature}
+            onBlur={onBlur('temperature')}
+            value={paramInputs.temperature}
           />
         </label>
 
@@ -155,16 +231,19 @@ export default function ModelScreen() {
           <input
             type="checkbox"
             className="toggle toggle-primary"
-            checked={currParams.preferWebGPU}
+            checked={currParams.backend === 'webgpu'}
             onChange={(e) =>
-              setParams({ ...currParams, preferWebGPU: e.target.checked })
+              setParams({
+                ...currParams,
+                backend: e.target.checked ? 'webgpu' : 'cpu',
+              })
             }
             disabled={blockModelBtn}
           />
-          <span className="label-text">Prefer WebGPU</span>
+          <span className="label-text">Use WebGPU backend</span>
         </label>
 
-        {currParams.preferWebGPU && effectiveWebGPUMemoryBudget && (
+        {currParams.backend === 'webgpu' && effectiveWebGPUMemoryBudget && (
           <div className="text-sm opacity-80 mb-2">
             Usable WebGPU Budget:{' '}
             {toHumanReadableSize(effectiveWebGPUMemoryBudget)}
@@ -194,6 +273,46 @@ export default function ModelScreen() {
         >
           Clear cache
         </button>
+
+        <div className="mt-6 rounded-box border border-base-300 p-4">
+          <h2 className="text-xl mb-2">Benchmark</h2>
+          <p className="text-sm opacity-80 mb-3">
+            Runs against the currently loaded model. Prefill targets 512 tokens
+            and decode targets 64 tokens, clamped to the loaded context limits.
+            Each test does 1 warmup run and 3 measured runs.
+          </p>
+          {!loadedModel && (
+            <p className="text-sm opacity-80 mb-3">
+              Load a model first to run benchmark or perplexity.
+            </p>
+          )}
+          {benchmarkError && (
+            <div className="alert alert-error mb-3">
+              <span>{benchmarkError}</span>
+            </div>
+          )}
+          <div className="flex flex-wrap gap-2 mb-3">
+            <button
+              className="btn btn-sm btn-outline"
+              disabled={benchmarkBlocked}
+              onClick={() => runBenchmarkAction('benchmark')}
+            >
+              {benchmarkBusy ? 'Running...' : 'Run benchmark'}
+            </button>
+            <button
+              className="btn btn-sm btn-outline"
+              disabled={benchmarkBlocked}
+              onClick={() => runBenchmarkAction('perplexity')}
+            >
+              {benchmarkBusy ? 'Running...' : 'Run perplexity'}
+            </button>
+          </div>
+          {benchmarkOutput && (
+            <pre className="bg-base-200 rounded-box p-3 text-xs overflow-auto whitespace-pre-wrap">
+              {benchmarkOutput}
+            </pre>
+          )}
+        </div>
       </div>
 
       <div className="model-management">
@@ -214,7 +333,7 @@ export default function ModelScreen() {
               key={m.url}
               model={m}
               blockModelBtn={blockModelBtn}
-              preferWebGPU={currParams.preferWebGPU}
+              backend={currParams.backend}
               webgpuMemoryBudget={effectiveWebGPUMemoryBudget}
             />
           ))}
@@ -230,7 +349,7 @@ export default function ModelScreen() {
               key={m.url}
               model={m}
               blockModelBtn={blockModelBtn}
-              preferWebGPU={currParams.preferWebGPU}
+              backend={currParams.backend}
               webgpuMemoryBudget={effectiveWebGPUMemoryBudget}
             />
           ))}
@@ -271,7 +390,7 @@ function AddCustomModelDialog({ onClose }: { onClose(): void }) {
             getSelectableGgufFiles(
               data.siblings
                 .map((s) => s.rfilename)
-                .filter((f) => isValidGgufFile(f) && !isIQuantModel(f))
+                .filter((f) => isValidGgufFile(f))
             )
           );
           setErr('');
@@ -385,12 +504,12 @@ function AddCustomModelDialog({ onClose }: { onClose(): void }) {
 function ModelCard({
   model,
   blockModelBtn,
-  preferWebGPU,
+  backend,
   webgpuMemoryBudget,
 }: {
   model: DisplayedModel;
   blockModelBtn: boolean;
-  preferWebGPU: boolean;
+  backend: 'cpu' | 'webgpu';
   webgpuMemoryBudget?: number;
 }) {
   const {
@@ -406,7 +525,7 @@ function ModelCard({
   const m = model;
   const percent = parseInt(Math.round(m.downloadPercent * 100).toString());
   const blockedByWebGPU = !!(
-    preferWebGPU &&
+    backend === 'webgpu' &&
     webgpuMemoryBudget &&
     m.size > webgpuMemoryBudget
   );
@@ -428,16 +547,6 @@ function ModelCard({
             HF repo: {m.hfModel}
             <br />
             Size: {toHumanReadableSize(m.size)}
-            {m.size > MAX_GGUF_SIZE && (
-              <div
-                className="tooltip tooltip-right"
-                data-tip="Big model size, may not be able to load due to RAM limitation"
-              >
-                <span className="text-yellow-300 ml-2">
-                  <FontAwesomeIcon icon={faWarning} />
-                </span>
-              </div>
-            )}
             {m.state == ModelState.DOWNLOADING
               ? ` - Downloaded: ${percent}%`
               : ''}

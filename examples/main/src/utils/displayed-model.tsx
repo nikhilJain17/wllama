@@ -1,4 +1,4 @@
-import { Model } from '@wllama/wllama';
+import { Model } from '@reeselevine/wllama-webgpu';
 import { ModelState } from './types';
 import { WllamaStorage } from './utils';
 import { LIST_MODELS } from '../config';
@@ -55,12 +55,6 @@ export class DisplayedModel {
 interface UserAddedModel {
   url: string;
   size: number;
-}
-
-export function isIQuantModel(nameOrUrl: string): boolean {
-  const normalized =
-    nameOrUrl.replace(/\?.*/, '').split('/').pop() ?? nameOrUrl;
-  return normalized.toUpperCase().includes('IQ');
 }
 
 export function getUserAddedModels(cachedModels: Model[]): DisplayedModel[] {

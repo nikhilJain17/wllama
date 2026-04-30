@@ -3,7 +3,6 @@ import { Wllama, WllamaChatMessage } from './wllama';
 
 const CONFIG_PATHS = {
   'jspi/single-thread/wllama.wasm': '/src/jspi-single-thread/wllama.wasm',
-  'jspi/multi-thread/wllama.wasm': '/src/jspi-multi-thread/wllama.wasm',
   'asyncify/single-thread/wllama.wasm':
     '/src/asyncify-single-thread/wllama.wasm',
   'asyncify/multi-thread/wllama.wasm': '/src/asyncify-multi-thread/wllama.wasm',
@@ -47,7 +46,7 @@ test.sequential('loads single model file with WebGPU', async () => {
   }
 
   const wllama = new Wllama(CONFIG_PATHS, {
-    preferWebGPU: true,
+    backend: 'webgpu',
   });
 
   await wllama.loadModelFromUrl(TINY_MODEL, {
@@ -72,7 +71,7 @@ test.sequential('generates completion with WebGPU', async () => {
   }
 
   const wllama = new Wllama(CONFIG_PATHS, {
-    preferWebGPU: true,
+    backend: 'webgpu',
   });
 
   await wllama.loadModelFromUrl(TINY_MODEL, {
