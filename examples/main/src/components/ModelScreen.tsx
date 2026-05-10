@@ -4,12 +4,10 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faTrashAlt,
   faXmark,
-  faWarning,
   faCheck,
 } from '@fortawesome/free-solid-svg-icons';
 import { DEFAULT_INFERENCE_PARAMS } from '../config';
 import {
-  getWebGPUMemoryBudget,
   toHumanReadableSize,
   useDebounce,
 } from '../utils/utils';
@@ -53,9 +51,6 @@ function getGgufOptionLabel(file: string) {
 
 export default function ModelScreen() {
   const [showAddCustom, setShowAddCustom] = useState(false);
-  const [webgpuMemoryBudget, setWebgpuMemoryBudget] = useState<
-    number | undefined
-  >();
   const [benchmarkBusy, setBenchmarkBusy] = useState(false);
   const [benchmarkError, setBenchmarkError] = useState<string | null>(null);
   const [benchmarkOutput, setBenchmarkOutput] = useState('');
@@ -79,29 +74,6 @@ export default function ModelScreen() {
   const blockModelBtn = !!(loadedModel || isDownloading || isLoadingModel);
   const benchmarkBlocked =
     benchmarkBusy || isDownloading || isLoadingModel || !loadedModel;
-  const effectiveWebGPUMemoryBudget = webgpuMemoryBudget
-    ? Math.floor(webgpuMemoryBudget * 0.8)
-    : undefined;
-
-  useEffect(() => {
-    let cancelled = false;
-
-    getWebGPUMemoryBudget()
-      .then((budget) => {
-        if (!cancelled) {
-          setWebgpuMemoryBudget(budget);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setWebgpuMemoryBudget(undefined);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   useEffect(() => {
     setParamInputs({
@@ -243,13 +215,6 @@ export default function ModelScreen() {
           <span className="label-text">Use WebGPU backend</span>
         </label>
 
-        {currParams.backend === 'webgpu' && effectiveWebGPUMemoryBudget && (
-          <div className="text-sm opacity-80 mb-2">
-            Usable WebGPU Budget:{' '}
-            {toHumanReadableSize(effectiveWebGPUMemoryBudget)}
-          </div>
-        )}
-
         <button
           className="btn btn-sm mr-2"
           onClick={() => setParams(DEFAULT_INFERENCE_PARAMS)}
@@ -333,8 +298,6 @@ export default function ModelScreen() {
               key={m.url}
               model={m}
               blockModelBtn={blockModelBtn}
-              backend={currParams.backend}
-              webgpuMemoryBudget={effectiveWebGPUMemoryBudget}
             />
           ))}
       </div>
@@ -349,8 +312,6 @@ export default function ModelScreen() {
               key={m.url}
               model={m}
               blockModelBtn={blockModelBtn}
-              backend={currParams.backend}
-              webgpuMemoryBudget={effectiveWebGPUMemoryBudget}
             />
           ))}
       </div>
@@ -504,13 +465,9 @@ function AddCustomModelDialog({ onClose }: { onClose(): void }) {
 function ModelCard({
   model,
   blockModelBtn,
-  backend,
-  webgpuMemoryBudget,
 }: {
   model: DisplayedModel;
   blockModelBtn: boolean;
-  backend: 'cpu' | 'webgpu';
-  webgpuMemoryBudget?: number;
 }) {
   const {
     downloadModel,
@@ -524,19 +481,11 @@ function ModelCard({
 
   const m = model;
   const percent = parseInt(Math.round(m.downloadPercent * 100).toString());
-  const blockedByWebGPU = !!(
-    backend === 'webgpu' &&
-    webgpuMemoryBudget &&
-    m.size > webgpuMemoryBudget
-  );
-  const blockedActionLabel = blockedByWebGPU
-    ? `Too large for current WebGPU budget (${toHumanReadableSize(webgpuMemoryBudget!)})`
-    : undefined;
   return (
     <div
       className={`card bg-base-100 w-full mb-2 ${
         m.state === ModelState.LOADED ? 'border-2 border-primary' : ''
-      } ${blockedByWebGPU ? 'opacity-50 saturate-0' : ''}`}
+      }`}
       key={m.url}
     >
       <div className="card-body p-4 flex flex-row">
@@ -551,13 +500,6 @@ function ModelCard({
               ? ` - Downloaded: ${percent}%`
               : ''}
           </small>
-
-          {blockedByWebGPU && (
-            <div className="text-sm text-warning mt-1">
-              <FontAwesomeIcon icon={faWarning} className="mr-2" />
-              Model size exceeds the current WebGPU budget.
-            </div>
-          )}
 
           {m.state === ModelState.LOADED && currRuntimeInfo && (
             <>
@@ -600,8 +542,7 @@ function ModelCard({
             <button
               className="btn btn-primary btn-sm mr-2"
               onClick={() => downloadModel(m)}
-              disabled={blockModelBtn || blockedByWebGPU}
-              title={blockedActionLabel}
+              disabled={blockModelBtn}
             >
               Download
             </button>
@@ -611,8 +552,7 @@ function ModelCard({
               <button
                 className="btn btn-primary btn-sm mr-2"
                 onClick={() => loadModel(m)}
-                disabled={blockModelBtn || blockedByWebGPU}
-                title={blockedActionLabel}
+                disabled={blockModelBtn}
               >
                 Load model
               </button>
