@@ -56,6 +56,7 @@ if (WLLAMA_COMPAT)
     list(APPEND WLLAMA_LINK_OPTIONS
         -fexceptions
         -sASYNCIFY=1
+        -sBINARYEN_EXTRA_PASSES=--one-caller-inline-max-function-size=0
         -sASYNCIFY_ADD=['wllama_start','wllama_action']
     )
 else()
