@@ -1,3 +1,5 @@
+import compatWasmUrl from '../../../compat/wasm/wllama.wasm?url';
+import compatWorkerUrl from '../../../compat/wasm/wllama.js?url';
 import wasmUrl from '@wllama/wllama/esm/wasm/wllama.wasm?url';
 import wllamaPackageJson from '@wllama/wllama/package.json';
 import { InferenceParams } from './utils/types';
@@ -5,6 +7,7 @@ import { InferenceParams } from './utils/types';
 export const WLLAMA_VERSION = wllamaPackageJson.version;
 
 export const WLLAMA_CONFIG_PATHS = { default: wasmUrl };
+export const WLLAMA_COMPAT_PATHS = { wasm: compatWasmUrl, worker: compatWorkerUrl };
 
 export const MAX_GGUF_SIZE = 2 * 1024 * 1024 * 1024; // 2GB
 
